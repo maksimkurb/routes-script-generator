@@ -1,14 +1,6 @@
 'use strict';
 
 const Assert = require('assert');
-Assert(process.env.ROLLBAR_TOKEN, 'Provide Rollbar token!');
-
-const Rollbar = require('rollbar');
-const rollbar = new Rollbar({
-  accessToken: process.env.ROLLBAR_TOKEN,
-  captureUncaught: true,
-  captureUnhandledRejections: true,
-});
 
 const Publisher = require('./publisher');
 

@@ -59,7 +59,7 @@ module.exports.generatePacScriptAsync = async (sources) => {
   if (csv.error) {
     return csv;
   }
-  const content = await generatePacFromStringAsync(csv.content);
+  const content = await generateBatFromStringAsync(csv.content);
   return {
     content,
     date: source.date,
@@ -70,7 +70,7 @@ module.exports.generatePacScriptAsync = async (sources) => {
 
 //==============GENERATE-PACS.JS============================
 
-async function generatePacFromStringAsync(input) {
+async function generateBatFromStringAsync(input) {
 
   //const typeToProxyString = await Proxies.getProxyStringAsync();
   Logger.log('Generate pac from script...');
@@ -277,6 +277,17 @@ async function generatePacFromStringAsync(input) {
     return result;
   }
 
+  // https://stackoverflow.com/a/21903839
+  function createNetmaskAddr(bitCount) {
+    var mask=[];
+    for(i=0;i<4;i++) {
+      var n = Math.min(bitCount, 8);
+      mask.push(256 - Math.pow(2, 8-n));
+      bitCount -= n;
+    }
+    return mask.join('.');
+  }
+
   const maskedAddrMaskAddrPairs = [];
 
   for (const blockedIp in ipToMaskInt) {
@@ -284,7 +295,7 @@ async function generatePacFromStringAsync(input) {
     const cidrInt = ipToMaskInt[blockedIp];
     const mask = cidrInt && -1 << (32 - cidrInt);
     const maskedAddr = pat & mask;
-    maskedAddrMaskAddrPairs.push([maskedAddr, mask]);
+    maskedAddrMaskAddrPairs.push([maskedAddr, mask, blockedIp, createNetmaskAddr(cidrInt)]);
   }
 
   function isCensoredByMaskedIp(ip) {
@@ -315,71 +326,6 @@ async function generatePacFromStringAsync(input) {
 
   hostsObj = treeToObj();
 
-  const template = function() {
-__START__;
-'use strict';
-/*
-Version: 0.2
-__SUCH_NAMES__ are template placeholders that MUST be replaced for the script to work.
-*/
-
-if (__IS_IE__()) {
-  throw new TypeError('https://rebrand.ly/ac-anticensority');
-}
-
-//const HTTPS_PROXIES = '__HTTPS_PROXIES__'; //'HTTPS proxy.antizapret.prostovpn.org:3143; ';
-//const PROXY_PROXIES = '__PROXY_PROXIES__'; //'PROXY proxy.antizapret.prostovpn.org:3128; ';
-//const PROXY_STRING  = HTTPS_PROXIES + PROXY_PROXIES + 'DIRECT';
-
-const PROXY_STRING = 'SOCKS5 localhost:9150; SOCKS5 localhost:9050; DIRECT';
-
-__MASKED_DATA__;
-__DATA_EXPR__;
-__REQUIRED_FUNS__;
-
-function FindProxyForURL(url, host) {
-
-  let ifByHost = false;
-  let ifByMaskedIp = false;
-  // Remove last dot.
-  if (host[host.length - 1] === '.') {
-    host = host.substring(0, host.length - 1);
-  }
-  __MUTATE_HOST_EXPR__;
-
-  return (function isCensored(){
-
-    ifByHost = __IS_CENSORED_BY_HOST_EXPR__;
-    if (ifByHost) {
-      return true;
-    }
-
-    const ip = dnsResolve(host);
-    if (ip) {
-      if (__IS_CENSORED_BY_IP_EXPR__) {
-        return true;
-      }
-      ifByMaskedIp = __IS_CENSORED_BY_MASKED_IP_EXPR__;
-      if (ifByMaskedIp) {
-        return true;
-      };
-    }
-
-    return false;
-
-  })() ? PROXY_STRING : 'DIRECT';
-
-}
-__END__;
-  };
-
-  function stringifyCall() {
-    var fun = arguments[0];
-    var args = [].slice.call( arguments, 1 )
-      .map( function(a) { return typeof a !== 'string' ? JSON.stringify(a) : a; } ).join(', ');
-    return '(' + fun + ')(' + args + ')';
-  }
-
   const ipsArr = Object.keys(ipsObj).reduce(function (acc, ip) {
 
     acc.push(ip);
@@ -387,35 +333,16 @@ __END__;
 
   }, []);
 
-  const hostsArr = Object.keys(hostsObj).reduce(function (acc, host) {
-
-    acc.push(host);
-    return acc;
-
-  }, []);
-
-
-  const dataExpr = Algo.generate.dataExpr(hostsArr, ipsArr);
-
+  const rows = [
+    ...maskedAddrMaskAddrPairs.map(([, , ip, mask]) => `route ADD ${ip} MASK ${mask}`),
+    ...ipsArr.map(ip => `route ADD ${ip}`),
+  ]
+  
   const requiredFunctions = Algo.requiredFunctions || [];
   requiredFunctions.push(
     isCensoredByMaskedIp,
   );
 
-  return '// From repo: ' + remoteUpdated.toLowerCase() + '\n' +
-    template.toString()
-    .replace(/^[\s\S]*?__START__;\s*/g, '')
-    .replace(/\s*?__END__;[\s\S]*$/g, '')
-    .replace(/^ {4}/gm, '')
-    .replace('__MASKED_DATA__;', `const maskedAddrMaskAddrPairs = ${JSON.stringify(maskedAddrMaskAddrPairs)};\n`)
-    .replace('__DATA_EXPR__;', dataExpr)
-    .replace('__REQUIRED_FUNS__;', requiredFunctions.join(';\n') + ';\n')
-    .replace('__MUTATE_HOST_EXPR__;', '')
-    .replace('__IS_IE__()', '/*@cc_on!@*/!1')
-    //.replace('__HTTPS_PROXIES__', typeToProxyString.HTTPS || ';' )
-    //.replace('__PROXY_PROXIES__', typeToProxyString.PROXY || ';' )
-    .replace('__IS_CENSORED_BY_MASKED_IP_EXPR__', 'isCensoredByMaskedIp(ip)')
-    .replace('__IS_CENSORED_BY_IP_EXPR__', Algo.generate.isCensoredByIpExpr() )
-    .replace('__IS_CENSORED_BY_HOST_EXPR__', Algo.generate.isCensoredByHostExpr() );
+  return rows.join('\n');
 
 }

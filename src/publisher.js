@@ -1,16 +1,11 @@
 // Author: Ilya Ig. Petrov, ilyaigpetrov@gmail.com, 2017
 'use strict';
 
-const Assert = require('assert');
+const fs = require('fs');
 const Xml2Js = require('xml2js');
 const Logger = require('./logger');
 const Utils = require('./utils');
 const Generator = require('./generator');
-const GitHub = require('./github');
-
-const GH_REPO = process.env.GH_REPO
-Assert(GH_REPO, 'GH_REPO env variable is required. Example: anticensority/generated-pac-scripts');
-const REPO_URL = `https://api.github.com/repos/${GH_REPO}`;
 
 function strToDate(str) {
 
@@ -120,13 +115,7 @@ async function updatePacScriptAsync(ifForced) {
 
   var start = new Date();
 
-  let lastFetchDate = undefined;
-  if (!ifForced) {
-    const res =  await Utils.fetch(`${REPO_URL}/commits`);
-    lastFetchDate = JSON.parse(res.content)[0].commit.message.replace(/^Updated: /, '');
-  }
-
-  const sources = await ifShouldUpdateFromSourcesAsync(lastFetchDate);
+  const sources = await ifShouldUpdateFromSourcesAsync();
   if (!sources) {
     Logger.log('Too early to update. New version is not ready.');
     return;
@@ -136,17 +125,17 @@ async function updatePacScriptAsync(ifForced) {
   if (result.error) {
     throw result.error;
   }
-  const pacData = result.content;
+  const batData = result.content;
 
   Logger.log('PAC script generated. Saving...');
 
-  var [err] = await GitHub.uploadToGitHubAsync(REPO_URL, pacData, result.dateString);
-  if (err) {
-    throw err;
-  }
+  fs.writeFile('./generated.bat', batData, (err) => {
+    if (err) {
+      console.error(err);
+    }
 
-  Logger.log('TIME:' + (new Date() - start));
-
+    Logger.log('TIME:' + (new Date() - start));
+  });
 }
 
 function testPunycode() {

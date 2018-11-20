@@ -44,7 +44,7 @@ module.exports = (function() {
 
   };
 
-  function generateDataExpr(hostsArr, ipsArr) {
+  function generateDataExpr(ipsArr) {
 
     const ipsJson = JSON.stringify( toLenToStr(ipsArr) );
     const hostsJson = JSON.stringify( toLenToStr(hostsArr) );
