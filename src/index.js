@@ -3,6 +3,7 @@
 const Assert = require('assert');
 
 const Publisher = require('./publisher');
+Assert(process.env.GATEWAY, 'Provide GATEWAY ip!');
 
 let ifForce = false;
 const args = process.argv.slice(2);

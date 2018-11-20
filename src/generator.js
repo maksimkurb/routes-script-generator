@@ -333,9 +333,10 @@ async function generateBatFromStringAsync(input) {
 
   }, []);
 
+  const GATEWAY = process.env.GATEWAY;
   const rows = [
-    ...maskedAddrMaskAddrPairs.map(([, , ip, mask]) => `route ADD ${ip} MASK ${mask}`),
-    ...ipsArr.map(ip => `route ADD ${ip}`),
+    ...maskedAddrMaskAddrPairs.map(([, , ip, mask]) => `route ADD ${ip} MASK ${mask} ${GATEWAY}`),
+    ...ipsArr.map(ip => `route ADD ${ip} MASK 255.255.255.255 ${GATEWAY}`),
   ]
   
   const requiredFunctions = Algo.requiredFunctions || [];
